@@ -161,7 +161,7 @@ dmen_Cluster4 %>%
 
 ```{r}
 dmen_Cluster4 %>% 
-  filter(name!="Owen Power") %>% 
+  filter(name!="Owen Power" & name!= "Adam Larsson"& name!= "Seth Jones") %>% 
   ggplot( aes(x = I_F_xGoals_with_earned_rebounds, y = I_F_dZoneGiveaways, label = name)) +
   geom_point()+
   geom_point(data = Owen_Power, aes(color='Owen Power'))+
