@@ -1,0 +1,176 @@
+---
+title: "Defenseman Clustering"
+author: "Ben Wagner"
+date: "2023-06-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load Libraries
+library(dplyr)
+library(tidyverse)
+library(cluster)
+library(factoextra)
+```
+
+```{r, Read Data}
+skaters <- read.csv("C:\\Users\\littl\\OneDrive\\Desktop\\skaters.csv")
+```
+
+```{r}
+#Cleaning
+dmen <- skaters %>%
+  filter(position == "D", situation=="all") %>% 
+  
+  select(!c(offIce_xGoalsPercentage, offIce_corsiPercentage, offIce_fenwickPercentage, OffIce_F_xGoals, OffIce_A_xGoals, OffIce_F_shotAttempts, OffIce_A_shotAttempts, corsiForAfterShifts, corsiAgainstAfterShifts, fenwickForAfterShifts, fenwickAgainstAfterShifts, faceoffsWon, faceoffsLost, I_F_shifts, xGoalsForAfterShifts, xGoalsAgainstAfterShifts)) %>% 
+  
+  mutate(shifts_per_game=shifts/games_played)
+
+#Getting Rid of any point related statistics to just cluster on play style
+dmen <- dmen %>% 
+  select(!c(I_F_primaryAssists, I_F_secondaryAssists, I_F_points, I_F_goals))
+```
+
+```{r, Clustering}
+#scale 
+dmen_noID = dmen[,8:135]
+dmen_noID.scale = scale(dmen_noID)
+
+#Optimla Clusters
+set.seed(12345)
+fviz_nbclust(dmen_noID.scale, kmeans, method = 'wss', k.max=10)
+```
+
+```{r}
+#Cluster based off optimal NB CLust
+set.seed(12345)
+cluster5 = kmeans(dmen_noID.scale, centers=5, nstart = 25)
+fviz_cluster(cluster5, data = dmen_noID.scale)
+```
+
+```{r}
+#Extract Cluster and input into dmen set
+dmen<-cbind(dmen, cluster5$cluster)
+colnames(dmen)[136] = "Cluster"
+```
+```{r}
+dmen_Cluster1<-dmen %>% 
+  filter(Cluster==1)
+  
+dmen_Cluster2<-dmen %>% 
+  filter(Cluster==2)
+
+dmen_Cluster3<-dmen %>% 
+  filter(Cluster==3)
+
+dmen_Cluster4<-dmen %>% 
+  filter(Cluster==4)
+
+dmen_Cluster5<-dmen %>% 
+  filter(Cluster==5)
+```
+
+```{r}
+dmen_summary <- dmen %>%
+  mutate(I_F_xGoals_per = I_F_xGoals/games_played) %>% 
+  mutate(OnIce_A_xGoals_per = OnIce_A_xGoals/games_played) %>%
+  mutate(hits_per = I_F_hits/games_played) %>%
+  mutate(takeaways_per = I_F_takeaways/games_played) %>% 
+  mutate(high_danger_per = I_F_highDangerxGoals/games_played) %>% 
+  mutate(high_danger_A_per= OnIce_A_highDangerxGoals/games_played)
+
+dmen_summary %>% 
+  group_by(Cluster) %>% 
+  summarise_at(vars(games_played, I_F_xGoals_per, OnIce_A_xGoals_per, hits_per, takeaways_per, high_danger_per, high_danger_A_per), list(mean))
+```
+
+```{r}
+dmen_Cluster4[order(dmen_Cluster4$OnIce_A_lowDangerGoals,decreasing=TRUE),]
+```
+
+```{r}
+My_theme <- theme(
+  #titles
+  plot.title=element_text(hjust=0.5, size=13, color="#003087"),
+  plot.title.position = "plot",
+  plot.caption=element_text(size=6, color="#003087", hjust=0.5),
+  plot.caption.position = "plot",
+  plot.subtitle = element_text(color = "#003087"),
+
+  #background
+  panel.border=element_blank(),
+  panel.background = element_rect(fill = "white"),
+  plot.background = element_rect(fill = "white"),
+  plot.margin=ggplot2::margin(0, 0, 0, 0, "in"),
+  #axes
+  axis.line = element_line(colour="#003087"),
+  axis.title.x = element_text(colour = "#003087"),
+  axis.title.y = element_text(colour = "#003087"),
+  axis.text = element_text(size=4.75, color="#003087"),
+  
+  legend.key.size = unit(0.5, 'cm'), #change legend key size
+  legend.key.height = unit(0.5, 'cm'), #change legend key height
+  legend.key.width = unit(0.15, 'cm'), #change legend key width
+  legend.title = element_text(size=7), #change legend title font size
+  legend.text = element_text(size=5)) #change legend text font size)
+```
+
+
+
+
+```{r}
+Owen_Power <- dmen_Cluster4 %>% 
+  filter(name=="Owen Power")
+
+PesceHanifin <- dmen_Cluster4 %>% 
+  filter(name=="Brett Pesce" | name=="Noah Hanifin")
+
+dmen_Cluster4 %>% 
+  filter(name!="Owen Power") %>% 
+  ggplot( aes(x = I_F_xGoals, y = I_F_takeaways, label = name)) +
+  geom_point()+
+  geom_point(data = Owen_Power, aes(color='Owen Power'))+
+  geom_point(data = PesceHanifin, aes(color='Targeted Players'))+
+  scale_color_manual(values = c("Owen Power"="#FFB81C", "Targeted Players"='red'))+
+  geom_text(data = Owen_Power, color='#FFB81C', size=3, vjust=1.35)+
+  geom_text(size=2, vjust=1.35)+
+  labs(x = "xGoals For 2022", y = "Takeaways 2022", title = "Owen Power Defensive Pair?")+
+  labs(color='Player',
+       caption = "@BenWagnerDS")+
+  My_theme
+```
+
+
+```{r}
+dmen_Cluster4 %>% 
+  filter(name!="Owen Power") %>% 
+  ggplot( aes(x = I_F_highDangerxGoals, y = OnIce_A_highDangerxGoals, label = name)) +
+  geom_point()+
+  geom_point(data = Owen_Power, aes(color='Owen Power'))+
+  geom_point(data = PesceHanifin, aes(color='Targeted Players'))+
+  scale_color_manual(values = c("Owen Power"="#FFB81C", "Targeted Players"='red'))+
+  geom_text(data = Owen_Power, color='#FFB81C', size=3.25, vjust=1.35)+
+  geom_text(size=2, vjust=1.35)+
+  labs(x = "High Danger xG For 2022", y = "High Danger xG Against 2022", title = "Owen Power Defensive Pair?")+
+  labs(color='Player')+
+  My_theme
+```
+
+
+```{r}
+dmen_Cluster4 %>% 
+  filter(name!="Owen Power") %>% 
+  ggplot( aes(x = I_F_xGoals_with_earned_rebounds, y = I_F_dZoneGiveaways, label = name)) +
+  geom_point()+
+  geom_point(data = Owen_Power, aes(color='Owen Power'))+
+  geom_text(data = Owen_Power, color='#FFB81C', size=3.25, vjust=1.35)+
+  geom_point(data = PesceHanifin, aes(color='Targeted Players'))+
+  scale_color_manual(values = c("Owen Power"="#FFB81C", "Targeted Players"='red'))+
+  geom_text(size=2, vjust=1.35)+
+  labs(x = "Created xG For 2022(xG with Earned Rebounds)", y = "D Zone Giveaways 2022", title = "Owen Power Defensive Pair?")+
+  labs(color='Player')+
+  My_theme
+```
+
